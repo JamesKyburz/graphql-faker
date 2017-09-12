@@ -22,6 +22,8 @@ class FakeEditor extends React.Component {
   constructor() {
     super();
 
+    this.baseUrl = window.location.href.match(/(.*)\/editor/)[1]
+
     this.state = {
       value: null,
       cachedValue: null,
@@ -34,7 +36,7 @@ class FakeEditor extends React.Component {
   }
 
   componentDidMount() {
-    fetch('/user-idl')
+    fetch(this.baseUrl + '/user-idl', { credentials: 'include' })
       .then(response => response.json())
       .then(idls => {
         this.updateValue(idls);
@@ -46,7 +48,7 @@ class FakeEditor extends React.Component {
   }
 
   fetcher(graphQLParams) {
-    return fetch(window.location.origin + '/graphql', {
+    return fetch(this.baseUrl + '/graphql', {
       method: 'post',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(graphQLParams),
@@ -66,10 +68,11 @@ class FakeEditor extends React.Component {
   }
 
   postIDL(idl) {
-    return fetch('/user-idl', {
+    return fetch(this.baseUrl + '/user-idl', {
       method: 'post',
       headers: { 'Content-Type': 'text/plain' },
-      body: idl
+      body: idl,
+      credentials: 'include'
     })
   }
 
@@ -184,7 +187,7 @@ class FakeEditor extends React.Component {
           <div className={classNames('tab-content', {
             '-active': activeTab === 1
           })}>
-            {this.state.schema && <GraphiQL fetcher={this.fetcher} schema={this.state.schema}/>}
+            {this.state.schema && <GraphiQL fetcher={(e) => this.fetcher(e)} schema={this.state.schema}/>}
           </div>
         </div>
       </div>
