@@ -21,6 +21,7 @@ var proxy_1 = require("./proxy");
 var utils_1 = require("./utils");
 var opn = require("opn");
 var cors = require('cors');
+var pick = require('lodash/pick');
 var DEFAULT_PORT = process.env.PORT || 9002;
 var argv = require('yargs')
     .usage('Usage: $0 [file]')
@@ -38,6 +39,10 @@ var argv = require('yargs')
     'e.g.: "Authorization: bearer XXXXXXXXX"')
     .nargs('H', 1)
     .implies('header', 'extend')
+    .describe('forward-headers', 'Headers that should be forwarded to the proxied server')
+    .array('forward-headers')
+    .default('forward-headers', [])
+    .implies('forward-headers', 'extend')
     .alias('co', 'cors-origin')
     .nargs('co', 1)
     .describe('co', 'CORS: Define Access-Control-Allow-Origin header')
@@ -57,6 +62,7 @@ if (argv.header) {
         headers[name] = value;
     }
 }
+var forwardHeaderNames = (argv.forwardHeaders || []).map(function (str) { return str.toLowerCase(); });
 var fileArg = argv._[0];
 var fileName = fileArg || (argv.extend ?
     './schema_extension.faker.graphql' :
@@ -119,12 +125,11 @@ function runServer(schemaIDL, extensionIDL, optionsCB) {
         extensionIDL.body = extensionIDL.body.replace('<RootTypeName>', schema.getQueryType().name);
     }
     app.options('/graphql', cors(corsOptions));
-    app.use('/graphql', cors(corsOptions), function (req, res) {
-        graphqlHTTP(function () {
-            var schema = buildServerSchema(schemaIDL);
-            return __assign({}, optionsCB(schema, extensionIDL, req.headers), { graphiql: true });
-        })(req, res);
-    });
+    app.use('/graphql', cors(corsOptions), graphqlHTTP(function (req) {
+        var schema = buildServerSchema(schemaIDL);
+        var forwardHeaders = pick(req.headers, forwardHeaderNames);
+        return __assign({}, optionsCB(schema, extensionIDL, forwardHeaders), { graphiql: true });
+    }));
     app.get('/user-idl', function (_, res) {
         res.status(200).json({
             schemaIDL: schemaIDL.body,

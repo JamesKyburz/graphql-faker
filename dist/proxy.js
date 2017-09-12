@@ -18,7 +18,7 @@ function proxyMiddleware(url, headers) {
     return getIntrospection().then(function (introspection) {
         var introspectionSchema = graphql_1.buildClientSchema(introspection.data);
         var introspectionIDL = graphql_1.printSchema(introspectionSchema);
-        return [introspectionIDL, function (serverSchema, extensionIDL, headers) {
+        return [introspectionIDL, function (serverSchema, extensionIDL, forwardHeaders) {
                 var extensionAST = graphql_1.parse(extensionIDL);
                 var extensionFields = getExtensionFields(extensionAST);
                 var schema = graphql_1.extendSchema(serverSchema, extensionAST);
@@ -27,11 +27,10 @@ function proxyMiddleware(url, headers) {
                 return {
                     schema: schema,
                     rootValue: function (info) {
-                        // TODO copy headers
                         var operationName = info.operationName;
                         var variables = info.variables;
                         var query = stripQuery(schema, info.document, operationName, extensionFields);
-                        return remoteServer(query, variables, operationName, headers)
+                        return remoteServer(query, variables, operationName, forwardHeaders)
                             .then(buildRootValue);
                     },
                 };
@@ -139,16 +138,15 @@ function extractOperation(queryAST, operationName) {
     return Object.values(operations)[0];
 }
 function requestFactory(url, headersObj) {
-    return function (query, variables, operationName, headers) {
-        var body = JSON.stringify({
-            operationName: operationName,
-            query: query,
-            variables: variables
-        });
+    return function (query, variables, operationName, forwardHeaders) {
         return node_fetch_1.default(url, {
             method: 'POST',
-            headers: new node_fetch_2.Headers(__assign({ "content-type": 'application/json' }, (headers || {}), headersObj, { "content-length": body.length })),
-            body: body
+            headers: new node_fetch_2.Headers(__assign({ "content-type": 'application/json' }, headersObj, forwardHeaders)),
+            body: JSON.stringify({
+                operationName: operationName,
+                query: query,
+                variables: variables,
+            })
         }).then(function (responce) {
             if (responce.ok)
                 return responce.json();
